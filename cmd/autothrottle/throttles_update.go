@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcrowley/go-metrics"
+
 	"github.com/DataDog/kafka-kit/v3/kafkametrics"
 	"github.com/DataDog/kafka-kit/v3/kafkazk"
 )
@@ -336,15 +338,22 @@ func applyBrokerThrottles(bs map[int]struct{}, capacities, prevThrottles replica
 				log.Printf("Updated throttle on broker %d [%s]\n", ID, role)
 
 				var rate *float64
-
+				var mRate metrics.Gauge
+				metricName := fmt.Sprintf("broker.%d.%s", ID, throttleConfigString)
 				// Store the configured rate.
 				switch role {
 				case "leader":
 					rate = capacities[ID][0]
 					prevThrottles.storeLeaderCapacity(ID, *rate)
+					rateBytes := int64(*rate * 1000000)
+					mRate = metrics.GetOrRegisterGauge(metricName, metricsRegistry)
+					mRate.Update(rateBytes)
 				case "follower":
 					rate = capacities[ID][1]
 					prevThrottles.storeFollowerCapacity(ID, *rate)
+					rateBytes := int64(*rate * 1000000)
+					mRate = metrics.GetOrRegisterGauge(metricName, metricsRegistry)
+					mRate.Update(rateBytes)
 				}
 
 				events <- brokerChangeEvent{
@@ -487,7 +496,7 @@ func removeBrokerThrottlesByID(params *ReplicationThrottleConfigs, ids map[int]s
 			},
 		}
 
-		changed, err := params.zk.UpdateKafkaConfig(config)
+		changes, err := params.zk.UpdateKafkaConfig(config)
 		switch err.(type) {
 		case nil:
 		case kafkazk.ErrNoNode:
@@ -501,9 +510,17 @@ func removeBrokerThrottlesByID(params *ReplicationThrottleConfigs, ids map[int]s
 			log.Printf("Error removing throttle on broker %d: %s\n", b, err)
 		}
 
-		if changed[0] || changed[1] {
+		if changes[0] || changes[1] {
 			unthrottledBrokers = append(unthrottledBrokers, b)
 			log.Printf("Throttle removed on broker %d\n", b)
+		}
+
+		for i, changed := range changes {
+			if changed {
+				throttleConfigString := config.Configs[i][0]
+				metricName := fmt.Sprintf("broker.%d.%s", b, throttleConfigString)
+				metrics.GetOrRegisterGauge(metricName, metricsRegistry).Update(0)
+			}
 		}
 
 		// Hardcoded sleep to reduce ZK load.

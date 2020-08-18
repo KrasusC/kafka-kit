@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/DataDog/kafka-kit/v3/kafkazk"
+	"github.com/rcrowley/go-metrics/exp"
 )
 
 // APIConfig holds configuration params for the admin API.
@@ -75,6 +76,9 @@ func initAPI(c *APIConfig, zk kafkazk.Handler) {
 	m.HandleFunc("/get_throttle", func(w http.ResponseWriter, req *http.Request) { getThrottleDeprecated(w, req, zk) })
 	m.HandleFunc("/set_throttle", func(w http.ResponseWriter, req *http.Request) { setThrottleDeprecated(w, req, zk) })
 	m.HandleFunc("/remove_throttle", func(w http.ResponseWriter, req *http.Request) { removeThrottleDeprecated(w, req, zk) })
+
+	// Metrics endpoint
+	m.Handle("/system/metrics", exp.ExpHandler(metricsRegistry))
 
 	// Start listener.
 	go func() {

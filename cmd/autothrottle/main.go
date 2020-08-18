@@ -14,6 +14,7 @@ import (
 	"github.com/DataDog/kafka-kit/v3/kafkametrics"
 	"github.com/DataDog/kafka-kit/v3/kafkametrics/datadog"
 	"github.com/DataDog/kafka-kit/v3/kafkazk"
+	"github.com/rcrowley/go-metrics"
 
 	"github.com/jamiealquiza/envy"
 )
@@ -25,29 +26,36 @@ var (
 	// Config holds configuration
 	// parameters.
 	Config struct {
-		APIKey             string
-		AppKey             string
-		NetworkTXQuery     string
-		NetworkRXQuery     string
-		BrokerIDTag        string
-		MetricsWindow      int
-		ZKAddr             string
-		ZKPrefix           string
-		Interval           int
-		APIListen          string
-		ConfigZKPrefix     string
-		DDEventTags        string
-		MinRate            float64
-		SourceMaxRate      float64
-		DestinationMaxRate float64
-		ChangeThreshold    float64
-		FailureThreshold   int
-		CapMap             map[string]float64
-		CleanupAfter       int64
+		APIKey               string
+		AppKey               string
+		NetworkTXQuery       string
+		NetworkRXQuery       string
+		BrokerIDTag          string
+		MetricsWindow        int
+		ZKAddr               string
+		ZKPrefix             string
+		Interval             int
+		APIListen            string
+		ConfigZKPrefix       string
+		DDTags               string
+		MinRate              float64
+		SourceMaxRate        float64
+		DestinationMaxRate   float64
+		ChangeThreshold      float64
+		FailureThreshold     int
+		CapMap               map[string]float64
+		CleanupAfter         int64
+		MetricsSubmission    bool
+		MetricsBackend       string
+		MetricsFlushInterval int
+		StatsdAddr           string
 	}
 
 	// Misc.
 	topicsRegex = []*regexp.Regexp{regexp.MustCompile(".*")}
+
+	// Metrics Registry
+	metricsRegistry = metrics.NewRegistry()
 )
 
 func main() {
@@ -63,7 +71,7 @@ func main() {
 	flag.IntVar(&Config.Interval, "interval", 180, "Autothrottle check interval (seconds)")
 	flag.StringVar(&Config.APIListen, "api-listen", "localhost:8080", "Admin API listen address:port")
 	flag.StringVar(&Config.ConfigZKPrefix, "zk-config-prefix", "autothrottle", "ZooKeeper prefix to store autothrottle configuration")
-	flag.StringVar(&Config.DDEventTags, "dd-event-tags", "", "Comma-delimited list of Datadog event tags")
+	flag.StringVar(&Config.DDTags, "dd-tags", "", "Comma-delimited list of Datadog tags")
 	flag.Float64Var(&Config.MinRate, "min-rate", 10, "Minimum replication throttle rate (MB/s)")
 	flag.Float64Var(&Config.SourceMaxRate, "max-tx-rate", 90, "Maximum outbound replication throttle rate (as a percentage of available capacity)")
 	flag.Float64Var(&Config.DestinationMaxRate, "max-rx-rate", 90, "Maximum inbound replication throttle rate (as a percentage of available capacity)")
@@ -71,6 +79,10 @@ func main() {
 	flag.IntVar(&Config.FailureThreshold, "failure-threshold", 1, "Number of iterations that throttle determinations can fail before reverting to the min-rate")
 	m := flag.String("cap-map", "", "JSON map of instance types to network capacity in MB/s")
 	flag.Int64Var(&Config.CleanupAfter, "cleanup-after", 60, "Number of intervals after which to issue a global throttle unset if no replication is running")
+	flag.BoolVar(&Config.MetricsSubmission, "metrics-submission", true, "Enable/disable metrics submission to the metrics backend of your choice")
+	flag.StringVar(&Config.MetricsBackend, "metrics-backend", "datadog", "Report metrics to the provided backend")
+	flag.IntVar(&Config.MetricsFlushInterval, "metrics-flush-interval", 30, "How often to flush metrics to the backend")
+	flag.StringVar(&Config.StatsdAddr, "statsd-addr", "localhost:8125", "Statsd addr in the format hostname:port or unix:///path/to/socket")
 
 	envy.Parse("AUTOTHROTTLE")
 	flag.Parse()
@@ -127,8 +139,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Get optional Datadog event tags.
-	t := strings.Split(Config.DDEventTags, ",")
+	// Get optional Datadog tags.
+	t := strings.Split(Config.DDTags, ",")
 	tags := []string{"name:kafka-autothrottle"}
 	for _, tag := range t {
 		tags = append(tags, tag)
@@ -180,6 +192,16 @@ func main() {
 		limits:                 lim,
 		failureThreshold:       Config.FailureThreshold,
 	}
+
+	appMetricsOpt := AppMetricsOpt{
+		reportEnable:  Config.MetricsSubmission,
+		backend:       Config.MetricsBackend,
+		flushInterval: time.Duration(Config.MetricsFlushInterval) * time.Second,
+		statsdAddr:    Config.StatsdAddr,
+		tags:          tags,
+	}
+
+	initAppMetrics(zk, appMetricsOpt)
 
 	// Run.
 	var interval int64

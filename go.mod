@@ -3,6 +3,7 @@ module github.com/DataDog/kafka-kit/v3
 go 1.13
 
 require (
+	github.com/DataDog/datadog-go v3.7.2+incompatible
 	github.com/DataDog/kafka-kit v3.1.0+incompatible // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
@@ -11,11 +12,13 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/jamiealquiza/envy v1.1.0
 	github.com/masterminds/semver v1.5.0
+	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/stretchr/testify v1.6.1
+	github.com/syntaqx/go-metrics-datadog v0.0.0-20181220201509-312b31920cc5
 	github.com/zorkian/go-datadog-api v2.29.0+incompatible
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
 	golang.org/x/sys v0.0.0-20200720211630-cb9d2d5c5666 // indirect

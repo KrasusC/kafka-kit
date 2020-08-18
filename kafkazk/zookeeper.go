@@ -59,6 +59,7 @@ type Handler interface {
 	GetPendingDeletion() ([]string, error)
 	GetTopics([]*regexp.Regexp) ([]string, error)
 	GetTopicConfig(string) (*TopicConfig, error)
+	GetBrokerIDs() ([]int, error)
 	GetAllBrokerMeta(bool) (BrokerMetaMap, []error)
 	GetAllPartitionMeta() (PartitionMetaMap, error)
 	MaxMetaAge() (time.Duration, error)
@@ -414,6 +415,27 @@ func (z *ZKHandler) GetTopicConfig(t string) (*TopicConfig, error) {
 	json.Unmarshal(data, config)
 
 	return config, nil
+}
+
+// GetBrokerIDs returns the IDs of all registered kafka brokers
+func (z *ZKHandler) GetBrokerIDs() ([]int, error) {
+	var path string
+	if z.Prefix != "" {
+		path = fmt.Sprintf("/%s/brokers/ids", z.Prefix)
+	} else {
+		path = "/brokers/ids"
+	}
+
+	entries, err := z.Children(path)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]int, len(entries))
+	for i, v := range entries {
+		ids[i], _ = strconv.Atoi(v)
+	}
+	return ids, nil
 }
 
 // GetAllBrokerMeta looks up all registered Kafka brokers and returns their

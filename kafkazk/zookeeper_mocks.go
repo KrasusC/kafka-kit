@@ -285,6 +285,11 @@ func (zk *Mock) GetTopicConfig(t string) (*TopicConfig, error) {
 	}, nil
 }
 
+// GetBrokerIDs mocks GetBrokerIDs
+func (zk *Mock) GetBrokerIDs() ([]int, error) {
+	return []int{1001, 1002, 1003, 1004, 1005, 1007}, nil
+}
+
 // GetAllBrokerMeta mocks GetAllBrokerMeta.
 func (zk *Mock) GetAllBrokerMeta(withMetrics bool) (BrokerMetaMap, []error) {
 	b := BrokerMetaMap{
